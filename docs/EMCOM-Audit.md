@@ -88,3 +88,24 @@ checks drive-qualified paths, drive-relative paths and UNC shares, with and
 without a known home. Tests now pass the home explicitly rather than mutating
 HOME/USERPROFILE in a multithreaded test process. No failing test was skipped
 and no privacy assertion was weakened.
+
+
+## CI follow-up: macOS hosted runner queue
+
+The ARM `macos-latest` job in run 45471678417 remained queued with no runner
+name and no executed steps. GitHub's job page reported that it was waiting for
+a hosted runner to come online, after its job condition had evaluated true.
+Linux, Windows and the audit ran in the same workflow. This isolates the
+observed problem to macOS runner provisioning, not application compilation,
+workflow approval or a dependency between these jobs. GitHub's overall Actions
+status was operational; the exact infrastructure cause is not available to us.
+
+The symptoms match [actions/runner#4833](https://github.com/actions/runner/issues/4833).
+The CI matrix now pins the separate standard `macos-15-intel` pool, which is
+listed in [GitHub's supported runners](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)
+and matches the app's minimum macOS version. The same formatting, Clippy, native
+Rust tests and JS checks remain enabled. An additional locked ARM-target
+`cargo check` keeps Apple Silicon compilation covered without depending on an
+ARM hosted machine. Cross-compilation does not run ARM tests or validate real
+notifications. No paid larger runner, self-hosted runner, installer build,
+artifact upload or release permission is introduced.
