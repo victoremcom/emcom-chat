@@ -14,7 +14,7 @@ case "$1" in
   *) exit 0 ;;
 esac
 
-APP_ID="com.ankurk91.google-chat-tauri"
+APP_ID="com.emcomsys.chat"
 
 if [ -n "$SUDO_USER" ]; then
     USER_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
@@ -33,7 +33,7 @@ rm -rf "$USER_HOME/.config/$APP_ID"
 # weaker reset than the in-app one.
 rm -rf "$USER_HOME/.cache/$APP_ID"
 # Launch-at-login entry, if the user enabled it
-rm -f "$USER_HOME/.config/autostart/Google Chat.desktop"
-rm -f "$USER_HOME/.config/autostart/google-chat-tauri.desktop"
+rm -f "$USER_HOME/.config/autostart/EMCOM Chat.desktop"
+rm -f "$USER_HOME/.config/autostart/emcom-chat.desktop"
 
 exit 0

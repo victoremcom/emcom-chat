@@ -1,10 +1,10 @@
 {
-  "name": "google-chat-tauri",
+  "name": "emcom-chat",
   "version": "1.6.1",
   "private": true,
   "description": "Unofficial desktop app for Google Chat.",
-  "homepage": "https://github.com/ankurk91/google-chat-tauri",
-  "repository": "https://github.com/ankurk91/google-chat-tauri",
+  "homepage": "https://github.com/victoremcom/emcom-chat",
+  "repository": "https://github.com/victoremcom/emcom-chat",
   "author": "ankurk91",
   "license": "GPL-3.0-only",
   "packageManager": "pnpm@12.21.0",

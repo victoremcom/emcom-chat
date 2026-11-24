@@ -362,6 +362,27 @@ console.log('[3/9] notifications');
   check('marks where it came from', swCall.args.title === 'SW');
 }
 
+console.log('[3b/9] EMCOM privacy, IPC scope and page liveness');
+{
+  for (const path of ['/mail/u/0/', '/chatty', '/chats/']) {
+    const { window, calls } = load({ href: `https://mail.google.com${path}` });
+    check(`does not install Chat features on ${path}`, window.Notification === undefined &&
+      !calls.some((c) => c.command === 'set_unread_count'));
+  }
+  const { window, calls, tick } = load();
+  new window.Notification('PRIVATE_TITLE', {
+    body: 'PRIVATE_BODY', tag: 'person@example.com',
+    data: { 'PRIVATE_KEY': 'PRIVATE_VALUE', room: 'PRIVATE_ROOM' }
+  });
+  const logs = JSON.stringify(calls.filter((c) => c.command === 'page_log'));
+  check('never logs notification content, tags, keys or payload values',
+    !/PRIVATE_|person@example/.test(logs));
+  const before = calls.filter((c) => c.command === 'set_unread_count').length;
+  tick();
+  check('reports page liveness even when unread state stays unchanged',
+    calls.filter((c) => c.command === 'set_unread_count').length > before);
+}
+
 console.log('[4/9] links');
 {
   const { window, calls } = load();

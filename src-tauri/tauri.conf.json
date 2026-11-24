@@ -1,9 +1,9 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Google Chat",
-  "mainBinaryName": "google-chat-tauri",
+  "productName": "EMCOM Chat",
+  "mainBinaryName": "emcom-chat",
   "version": "1.6.1",
-  "identifier": "com.ankurk91.google-chat-tauri",
+  "identifier": "com.emcomsys.chat",
   "build": {
     "frontendDist": "../frontend"
   },
@@ -28,7 +28,7 @@
       "nsis"
     ],
     "category": "SocialNetworking",
-    "publisher": "ankurk91",
+    "publisher": "EMCOM",
     "shortDescription": "Unofficial desktop app for Google Chat",
     "longDescription": "Unofficial desktop wrapper for Google Chat with a tray icon, unread message counter and desktop notifications.",
     "copyright": "Copyright (c) ankurk91",
@@ -63,7 +63,7 @@
         "silent": true
       },
       "nsis": {
-        "installMode": "perMachine",
+        "installMode": "currentUser",
         "languages": [
           "English"
         ],

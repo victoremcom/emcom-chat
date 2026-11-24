@@ -4,7 +4,7 @@ version = "1.6.1"
 description = "Unofficial desktop app for Google Chat."
 authors = ["ankurk91"]
 license = "GPL-3.0-only"
-repository = "https://github.com/ankurk91/google-chat-tauri"
+repository = "https://github.com/victoremcom/emcom-chat"
 edition = "2024"
 # The floor, not a preference: the highest MSRV anything in Cargo.lock asks for.
 # tauri 2.12 sets it (1.90); behind it sit notify-rust 4.19 at 1.89, and image,

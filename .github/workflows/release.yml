@@ -1,121 +1,16 @@
-name: release
+name: release-disabled
 
 on:
-  push:
-    # Semver tags only, so a stray tag cannot start a release. GitHub's filter
-    # syntax reads `+` as "one or more of the character before it".
-    tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'
-      - 'v[0-9]+.[0-9]+.[0-9]+-*'
   workflow_dispatch:
 
-# Only the build job may write, and only to publish the draft release.
 permissions:
   contents: read
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
-
 jobs:
-  checks:
-    uses: ./.github/workflows/ci.yml
-    permissions:
-      contents: read
-
-  build:
-    needs: checks
-    permissions:
-      contents: write
-
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # 24.04 sets the glibc floor at 2.39, so the deb and the AppImage
-          # need Ubuntu 24.04 / Linux Mint 22 or newer. 22.04 is deliberately
-          # not supported.
-          - platform: ubuntu-24.04
-            args: '--bundles deb,appimage'
-          # Universal: one dmg that runs on both Apple silicon and Intel.
-          - platform: macos-latest
-            args: '--target universal-apple-darwin --bundles app,dmg'
-          - platform: windows-latest
-            args: '--bundles nsis'
-
-    runs-on: ${{ matrix.platform }}
-    timeout-minutes: 30
-
+  blocked:
+    runs-on: ubuntu-24.04
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      # Only what the runner image lacks. build-essential, libssl-dev, patchelf
-      # and file all ship on ubuntu-24.04 already; listing them just invites apt
-      # to spend time upgrading them. If a future runner image drops one, the
-      # build breaks here rather than silently -- add it back at that point.
-      - name: Install Linux dependencies
-        if: startsWith(matrix.platform, 'ubuntu')
+      - name: Employee distribution is not approved
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev \
-            libayatana-appindicator3-dev
-
-      - name: Install pnpm and Node
-        uses: pnpm/setup@v3
-        with:
-          runtime: node@24
-          cache: true
-
-      # Same compiler as ci.yml and a local build: rust-toolchain.toml at the
-      # repo root names it. A released binary is then built by a compiler we
-      # can name, not by whatever stable happened to be that week.
-      - name: Install Rust toolchain
-        run: rustup toolchain install
-
-      # Not in rust-toolchain.toml: it would make every contributor on every
-      # platform download two Apple targets they will never build.
-      - name: Add macOS targets
-        if: matrix.platform == 'macos-latest'
-        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
-
-      - name: Restore Rust build cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: './src-tauri -> target'
-
-      # Bundles are selected per platform above rather than from
-      # tauri.conf.json, so a host can never emit a target we do not ship
-      # (notably rpm, which is deliberately not supported).
-      - name: Build and bundle
-        uses: tauri-apps/tauri-action@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          # Run this by hand and nothing is released: with no tag there is no
-          # release to create, and the bundles land as workflow artifacts to
-          # download and try. A tag push does both.
-          tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
-          releaseName: ${{ startsWith(github.ref, 'refs/tags/') && format('Google Chat {0}', github.ref_name) || '' }}
-          releaseBody: |
-            Builds are unsigned, so the first launch is blocked.
-
-            macOS: the dialog offers to move the app to the Bin -- click Done
-            instead, then System Settings > Privacy & Security > Security >
-            Open Anyway.
-
-            Windows: More info > Run anyway.
-          releaseDraft: true
-          prerelease: false
-          uploadWorkflowArtifacts: true
-          # Workflow artifacts are always zipped by GitHub, and the zip is named
-          # after the artifact -- so the name has to carry the extension, or a
-          # download tells you nothing about what is inside it. Release assets
-          # keep their real extension and are named to match.
-          workflowArtifactNamePattern: '[mainBinaryName]_[version]_[platform]-[arch][_setup][ext]'
-          releaseAssetNamePattern: '[mainBinaryName]_[version]_[platform]-[arch][_setup][ext]'
-          # Tauri's own updater is not what this app will use, so there is no
-          # manifest to publish and no signing key to sign it with.
-          uploadUpdaterJson: false
-          args: ${{ matrix.args }}
+          echo "Release builds are disabled pending signing, notarization and macOS/Windows acceptance tests."
+          exit 1

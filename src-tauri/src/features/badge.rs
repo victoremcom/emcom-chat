@@ -57,9 +57,9 @@ pub fn apply(app: &AppHandle) {
     // Shows in Alt-Tab and every desktop's window list. On Linux this is the
     // indicator most users actually notice.
     let title = if count > 0 {
-        format!("Google Chat ({count})")
+        format!("EMCOM Chat ({count})")
     } else {
-        "Google Chat".to_string()
+        "EMCOM Chat".to_string()
     };
     let _ = window.set_title(&title);
 

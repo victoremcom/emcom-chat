@@ -4,20 +4,24 @@ on:
   workflow_call:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, "emcom/**"]
     paths:
       - 'src-tauri/**'
       - 'scripts/**'
       - 'package.json'
       - 'pnpm-lock.yaml'
-      - '.github/workflows/ci.yml'
+      - '.github/workflows/**'
+      - 'rust-toolchain.toml'
+      - 'frontend/**'
   pull_request:
     paths:
       - 'src-tauri/**'
       - 'scripts/**'
       - 'package.json'
       - 'pnpm-lock.yaml'
-      - '.github/workflows/ci.yml'
+      - '.github/workflows/**'
+      - 'rust-toolchain.toml'
+      - 'frontend/**'
 
 permissions:
   contents: read
@@ -31,18 +35,23 @@ concurrency:
 
 jobs:
   check:
-    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 30
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       # Only what the runner image lacks. build-essential, libssl-dev, patchelf
       # and file all ship on ubuntu-24.04 already; listing them just invites apt
       # to spend time upgrading them. If a future runner image drops one, the
       # build breaks here rather than silently -- add it back at that point.
       - name: Install Linux dependencies
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -57,7 +66,7 @@ jobs:
         run: rustup toolchain install
 
       - name: Restore Rust build cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           workspaces: './src-tauri -> target'
 
@@ -65,16 +74,16 @@ jobs:
         run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
 
       - name: Clippy
-        run: cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+        run: cargo clippy --locked --manifest-path src-tauri/Cargo.toml -- -D warnings
 
       - name: Test
-        run: cargo test --manifest-path src-tauri/Cargo.toml
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml
 
       # chat.js has no build step, so nothing else would catch a syntax error
       # before it reaches the page. Only node itself is needed for that, hence
       # no install: there is nothing in node_modules this job uses.
       - name: Install Node
-        uses: pnpm/setup@v3
+        uses: pnpm/setup@731dfb6463bbd11c11fd0ee11fe00ed0e36d48a1 # v3
         with:
           runtime: node@24
           install: false
@@ -84,3 +93,25 @@ jobs:
 
       - name: Check injected script behaves
         run: node scripts/chatjs-test.js
+
+  dependency-audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install
+      - name: Install RustSec auditor
+        run: cargo install cargo-audit --version 0.23.0 --locked
+      - name: Audit Rust lockfile
+        run: cargo audit --file src-tauri/Cargo.lock
+      - name: Install Node and pnpm
+        uses: pnpm/setup@731dfb6463bbd11c11fd0ee11fe00ed0e36d48a1 # v3
+        with:
+          runtime: node@24
+          install: false
+      - name: Install locked build tools without package scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Audit JavaScript build tools
+        run: pnpm audit --audit-level moderate

@@ -54,7 +54,7 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
 
     TrayIconBuilder::with_id(ID)
         .icon(icons::decode(icons::initial())?)
-        .tooltip("Google Chat")
+        .tooltip("EMCOM Chat")
         .menu(&menu)
         // Linux clicks need the ksni backend -- see the Cargo.toml note.
         // macOS keeps the menu-on-left-click convention.
@@ -139,7 +139,7 @@ fn show_about_dialog(app: &AppHandle) {
     use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
     let text = format!(
-        "Google Chat v{}\n{}\n\n{} · GPL-3.0-only\n{}",
+        "EMCOM Chat v{}\n{}\n\n{} · GPL-3.0-only\n{}",
         env!("CARGO_PKG_VERSION"),
         env!("CARGO_PKG_DESCRIPTION"),
         env!("CARGO_PKG_AUTHORS"),
@@ -148,7 +148,7 @@ fn show_about_dialog(app: &AppHandle) {
 
     app.dialog()
         .message(text)
-        .title("About Google Chat")
+        .title("About EMCOM Chat")
         .kind(MessageDialogKind::Info)
         .show(|_| {});
 }

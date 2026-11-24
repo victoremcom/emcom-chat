@@ -43,7 +43,7 @@ impl Default for Prefs {
         Self {
             zoom: 1.0,
             start_hidden: false,
-            check_updates: true,
+            check_updates: false,
             offered_version: String::new(),
             spellcheck: true,
             spell_languages: None,
