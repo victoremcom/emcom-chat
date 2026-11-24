@@ -74,3 +74,17 @@ Run on macOS 15+ Intel and Apple Silicon, and Windows 10/11 x64, using company-s
 - Notification click integration, native permission reporting and sound reliability remain unimplemented/unproven on macOS/Windows.
 - Residual dependency advisories and free-text logging need review as described in final scan results.
 - This branch is for draft review only. Remote main retains upstream's dormant release workflow until the disabled-release change is merged. Do not tag or dispatch releases from remote main; the user has explicitly prohibited installer releases.
+
+
+## CI follow-up: Windows path redaction
+
+The first Windows CI run compiled and passed Clippy, then failed two path
+redaction tests: `/media/jane-usb/report.pdf` and `/home/jane/notes.txt` were
+logged unchanged. On Windows, a rooted path without a drive is not
+`Path::is_absolute()`. Redaction now treats both roots and Windows prefixes
+(including drive-relative paths) as locations that must be reduced to a file
+name outside the known home directory. Native Windows regression coverage also
+checks drive-qualified paths, drive-relative paths and UNC shares, with and
+without a known home. Tests now pass the home explicitly rather than mutating
+HOME/USERPROFILE in a multithreaded test process. No failing test was skipped
+and no privacy assertion was weakened.

@@ -16,10 +16,8 @@ const MAX_RESCUES: u32 = 2;
 /// build, where a panic that has already corrupted this state is exactly what
 /// you want to see rather than to carry on from.
 ///
-/// Two places do recover instead, both for reasons that do not apply here: the
-/// `HOME`-swapping guard in `redact`'s tests, so that one failing test does not
-/// take the rest of the file down with it; and the notification queue, where
-/// dropping one notification is not worth ending the process over.
+/// The notification queue does recover instead: dropping one notification is
+/// not worth ending the process over.
 #[derive(Default)]
 pub struct AppState {
     inner: Mutex<Inner>,
