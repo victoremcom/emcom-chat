@@ -140,7 +140,7 @@ const ISSUE_BODY: &percent_encoding::AsciiSet = &percent_encoding::NON_ALPHANUME
     .remove(b'.')
     .remove(b'~');
 
-/// Google's sign-in hosts, across every country domain.
+/// Explicit Google sign-in hosts supported by this fork.
 ///
 /// This is deliberately narrow -- only `accounts.google.<tld>` -- and it exists
 /// because signing in round-trips through the user's country domain
@@ -149,19 +149,19 @@ const ISSUE_BODY: &percent_encoding::AsciiSet = &percent_encoding::NON_ALPHANUME
 /// the system browser, which then follows the `continue=` parameter and
 /// finishes signing in *there*, leaving the app on the sign-in page.
 pub fn is_accounts_host(host: &str) -> bool {
-    let Some(rest) = host.strip_prefix("accounts.google.") else {
-        // accounts.youtube.com participates in the same flow.
-        return host == "accounts.youtube.com";
-    };
-
-    // What follows must look like a public suffix: one or two short alphabetic
-    // labels ("com", "co.in", "com.au", "de"). Without a public-suffix list this
-    // is what keeps "accounts.google.evil.com" out.
-    let labels: Vec<&str> = rest.split('.').collect();
-    matches!(labels.len(), 1 | 2)
-        && labels
-            .iter()
-            .all(|l| (1..=3).contains(&l.len()) && l.chars().all(|c| c.is_ascii_alphabetic()))
+    // Explicitly reviewed hosts, never a suffix-length heuristic. For example,
+    // accounts.google.abc.io passed the old check but need not belong to Google.
+    // Add regional hosts only after verifying ownership and the real login hop.
+    matches!(
+        host,
+        "accounts.google.com"
+            | "accounts.google.co.in"
+            | "accounts.google.co.uk"
+            | "accounts.google.com.au"
+            | "accounts.google.de"
+            | "accounts.google.fr"
+            | "accounts.youtube.com"
+    )
 }
 
 /// The marketing paths on `www.google.com`, which is otherwise off limits here.
@@ -218,6 +218,13 @@ fn is_attachment(url: &url::Url) -> bool {
 /// conversation -- belongs in the user's real browser, where their extensions,
 /// profiles and other tabs are.
 fn is_in_app(url: &url::Url) -> bool {
+    if url.scheme() != "https"
+        || url.port_or_known_default() != Some(443)
+        || !url.username().is_empty()
+        || url.password().is_some()
+    {
+        return false;
+    }
     let Some(host) = url.host_str() else {
         return false;
     };
@@ -231,7 +238,7 @@ fn is_in_app(url: &url::Url) -> bool {
     match host {
         "chat.google.com" => true,
         // Chat-in-Gmail lives under /chat; the rest of that host is Gmail proper.
-        "mail.google.com" => url.path().starts_with("/chat"),
+        "mail.google.com" => url.path() == "/chat" || url.path().starts_with("/chat/"),
         _ => is_accounts_host(host),
     }
 }
@@ -251,12 +258,16 @@ pub fn should_open_externally(url: &url::Url) -> bool {
 /// Only `features::media` asks, and that is Linux only.
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 pub fn is_chat_page(url: &url::Url) -> bool {
-    if url.scheme() != "https" {
+    if url.scheme() != "https"
+        || url.port_or_known_default() != Some(443)
+        || !url.username().is_empty()
+        || url.password().is_some()
+    {
         return false;
     }
     match url.host_str() {
         Some("chat.google.com") => true,
-        Some("mail.google.com") => url.path().starts_with("/chat"),
+        Some("mail.google.com") => url.path() == "/chat" || url.path().starts_with("/chat/"),
         _ => false,
     }
 }
@@ -295,7 +306,7 @@ mod tests {
     }
 
     #[test]
-    fn sign_in_works_in_every_country() {
+    fn reviewed_regional_sign_in_hosts_stay_in_app() {
         // The login hop goes through the user's country domain; sending it to
         // the browser strands the app on the sign-in page.
         for host in [
@@ -318,6 +329,8 @@ mod tests {
     fn lookalike_auth_hosts_are_not_trusted() {
         for host in [
             "accounts.google.evil.com",
+            "accounts.google.abc.io",
+            "accounts.google.co.zz",
             "accounts.google.com.attacker.net",
             "notaccounts.google.com",
             "accounts.googleXcom",
@@ -326,6 +339,20 @@ mod tests {
                 external(&format!("https://{host}/")),
                 "{host} must be external"
             );
+        }
+    }
+
+    #[test]
+    fn insecure_and_lookalike_chat_urls_are_external() {
+        for u in [
+            "http://chat.google.com/",
+            "http://accounts.google.com/",
+            "https://chat.google.com:8443/",
+            "https://user@chat.google.com/",
+            "https://mail.google.com/chatty",
+            "https://mail.google.com/chats/",
+        ] {
+            assert!(external(u), "{u} must not be trusted as Chat");
         }
     }
 
@@ -430,6 +457,9 @@ mod tests {
             "https://meet.google.com/abc-defg-hij",
             "https://chat.google.com.evil.example/",
             "http://chat.google.com/",
+            "https://chat.google.com:8443/",
+            "https://user@chat.google.com/",
+            "https://mail.google.com/chatty",
         ] {
             assert!(!chat_page(u), "{u} must not get the camera");
         }

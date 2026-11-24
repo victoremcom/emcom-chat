@@ -416,3 +416,15 @@ Auto-update that installs itself. Spell-checking settings on macOS and Windows, 
 
 Attachment links open in the system browser, which works. `on_download` would keep them in-app: one line in
 `urls::is_in_app`.
+
+
+## EMCOM fork changes
+
+See [EMCOM-Audit.md](EMCOM-Audit.md) for the current fork policy. In this fork,
+Google account hosts are an explicit list; Gmail proper does not receive the
+Chat shim, and every native custom command verifies the current main-window
+Chat URL. Origin ACLs remain broad enough for Tauri's Origin-header transport.
+Network observation continues after startup; script liveness is diagnostic,
+not proof of Google message delivery. No notification payload fields are logged.
+Release automation is disabled in the working branch. Upstream release and
+unsigned-install procedures above and in companion documents are historical.

@@ -42,7 +42,10 @@
    * that still looks like Chat. */
   const CHAT_ORIGINS = ['https://mail.google.com', 'https://chat.google.com'];
 
-  const onChatOrigin = CHAT_ORIGINS.includes(location.origin);
+  const currentPath = new URL(location.href).pathname;
+  const onChatOrigin = CHAT_ORIGINS.includes(location.origin) &&
+    (location.origin !== 'https://mail.google.com' ||
+      currentPath === '/chat' || currentPath.startsWith('/chat/'));
 
   /* A document with no origin of its own. The webview's failed-load page is
    * what arrives this way: `location.href` is still the URL that failed, but
@@ -331,6 +334,8 @@
 
   function rescan() {
     updateUnread();
+    // Liveness of the injected script only, not Google's message transport.
+    invoke('set_unread_count', { count: lastCount, hasUnread: lastHasUnread }).catch(ignore);
 
     const now = Date.now();
     if (now - stats.since < STATS_MS) return;
@@ -376,7 +381,7 @@
 
     invoke('open_external_url', { url: href }).catch(() => {
       // console, not log(): page_log travels over the same rejected bridge.
-      console.warn('[gchat] no link policy on this origin; navigating to', href);
+      console.warn('[gchat] no link policy on this origin; navigating to', redactUrl(href));
       location.href = href;
     });
   }
@@ -713,37 +718,8 @@
     if (cutoff > 0) liveNotifications.delete(cutoff);
   }
 
-  // What a notification carries, at `debug` -- so it is in a development log and
-  // never in a release one, where the level is `info`.
-  //
-  // Chat's own object carries no click handler, so the payload is the only place
-  // a conversation could be named. Values are reported only when they look like
-  // an id or a URL: a message body is not something to write to a log file.
-  const IDISH = /^[\w:@.\-\/?=&+%#]{1,160}$/;
-
-  const redact = (text) => (IDISH.test(text) ? text : '<text>');
-
-  function summarise(value) {
-    if (typeof value === 'string') return redact(value);
-    if (value === null || typeof value !== 'object') return String(value);
-    if (Array.isArray(value)) return `<array:${value.length}>`;
-    return `<object:${Object.keys(value).join('|')}>`;
-  }
-
   function describe(notification) {
-    const parts = [`notification created: id=${notification._id} source=${notification._source}`];
-    if (notification.tag) parts.push(`tag=${redact(notification.tag)}`);
-
-    const data = notification.data;
-    if (data && typeof data === 'object') {
-      for (const [key, value] of Object.entries(data)) {
-        parts.push(`data.${key}=${summarise(value)}`);
-      }
-    } else if (typeof data === 'string') {
-      parts.push(`data=${redact(data)}`);
-    }
-
-    log('debug', parts.join(' '));
+    log('debug', `notification created: id=${notification._id} source=${notification._source}`);
   }
 
   /* Chat calls this with `new`, so it has to be constructible -- a class is,

@@ -26,22 +26,33 @@ use std::path::Path;
 /// because it did not match, and the file name is what a report is asking
 /// about anyway.
 pub fn path(p: &Path) -> String {
-    let Some(home) = home_dir() else {
+    path_with_home(p, home_dir().as_deref())
+}
+
+fn path_with_home(p: &Path, home: Option<&Path>) -> String {
+    let Some(home) = home else {
         // No home to strip: keep a relative path whole, reduce anything
         // absolute to its name.
-        return if p.is_absolute() {
+        return if has_location(p) {
             tail(p)
         } else {
             p.display().to_string()
         };
     };
 
-    match p.strip_prefix(&home) {
+    match p.strip_prefix(home) {
         Ok(rest) if rest.as_os_str().is_empty() => "~".to_owned(),
         Ok(rest) => format!("~/{}", rest.display()).replace('\\', "/"),
-        Err(_) if p.is_absolute() => tail(p),
+        Err(_) if has_location(p) => tail(p),
         Err(_) => p.display().to_string(),
     }
+}
+
+/// Windows paths can disclose a location without being fully absolute:
+/// `\private\file` has a root but no drive, and `C:private\file` has a
+/// drive but no root. Neither should bypass redaction.
+fn has_location(p: &Path) -> bool {
+    p.has_root() || matches!(p.components().next(), Some(std::path::Component::Prefix(_)))
 }
 
 /// A URL **this app built**, with the query and fragment reduced to a marker.
@@ -160,62 +171,64 @@ fn home_dir() -> Option<std::path::PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
-
-    fn with_home<T>(home: &str, f: impl FnOnce() -> T) -> T {
-        // Serialised by the mutex below: these tests share one process
-        // environment, and a parallel test reading HOME mid-swap sees the
-        // wrong one.
-        static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-        let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
-
-        #[cfg(windows)]
-        let key = "USERPROFILE";
-        #[cfg(not(windows))]
-        let key = "HOME";
-
-        let saved = std::env::var_os(key);
-        // SAFETY: single-threaded within the lock above.
-        unsafe { std::env::set_var(key, home) };
-        let out = f();
-        match saved {
-            Some(v) => unsafe { std::env::set_var(key, v) },
-            None => unsafe { std::env::remove_var(key) },
-        }
-        out
-    }
 
     #[test]
     fn the_home_directory_becomes_a_tilde() {
-        with_home("/home/jane", || {
-            assert_eq!(
-                path(&PathBuf::from("/home/jane/.local/share/app/logs")),
-                "~/.local/share/app/logs"
-            );
-            assert_eq!(path(&PathBuf::from("/home/jane")), "~");
-        });
+        let home = Path::new("/home/jane");
+        assert_eq!(
+            path_with_home(Path::new("/home/jane/.local/share/app/logs"), Some(home)),
+            "~/.local/share/app/logs"
+        );
+        assert_eq!(path_with_home(home, Some(home)), "~");
     }
 
     #[test]
     fn a_path_outside_home_keeps_only_its_name() {
-        with_home("/home/jane", || {
-            // /media/jane-usb would name the account just as well.
-            assert_eq!(
-                path(&PathBuf::from("/media/jane-usb/report.pdf")),
-                ".../report.pdf"
-            );
-            assert_eq!(path(&PathBuf::from("logs/app.log")), "logs/app.log");
-        });
+        let home = Path::new("/home/jane");
+        // A rooted path is sensitive even without a drive letter on Windows.
+        assert_eq!(
+            path_with_home(Path::new("/media/jane-usb/report.pdf"), Some(home)),
+            ".../report.pdf"
+        );
+        assert_eq!(
+            path_with_home(Path::new("logs/app.log"), Some(home)),
+            "logs/app.log"
+        );
     }
 
     #[test]
     fn no_home_still_hides_absolute_paths() {
-        with_home("", || {
-            assert_eq!(
-                path(&PathBuf::from("/home/jane/notes.txt")),
-                ".../notes.txt"
-            );
-        });
+        assert_eq!(
+            path_with_home(Path::new("/home/jane/notes.txt"), None),
+            ".../notes.txt"
+        );
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn windows_locations_are_redacted_with_or_without_a_home() {
+        let home = Path::new(r"C:\Users\Jane Smith");
+        for input in [
+            r"D:\Private\report.pdf",
+            r"\Private\report.pdf",
+            r"D:Private\report.pdf",
+            r"\\private-server\Jane\report.pdf",
+        ] {
+            for known_home in [Some(home), None] {
+                assert_eq!(
+                    path_with_home(Path::new(input), known_home),
+                    ".../report.pdf"
+                );
+            }
+        }
+        assert_eq!(
+            path_with_home(Path::new(r"C:\Users\Jane Smith\logs\app.log"), Some(home)),
+            "~/logs/app.log"
+        );
+        assert_eq!(
+            path_with_home(Path::new("logs/app.log"), None),
+            "logs/app.log"
+        );
     }
 
     #[test]

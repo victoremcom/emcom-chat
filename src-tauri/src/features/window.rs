@@ -14,7 +14,7 @@ pub fn create(app: &AppHandle) -> tauri::Result<WebviewWindow> {
         .expect("APP_URL is a compile-time constant and must parse");
 
     WebviewWindowBuilder::new(app, MAIN, WebviewUrl::External(url))
-        .title("Google Chat")
+        .title("EMCOM Chat")
         .inner_size(800.0, 600.0)
         // Logical pixels, so the floor grows with display scaling. 400 lets the
         // whole window fit 540px on a 1080p screen, frame included.

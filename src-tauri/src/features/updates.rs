@@ -30,7 +30,7 @@ const STARTUP_DELAY: Duration = Duration::from_secs(30);
 const TIMEOUT: Duration = Duration::from_secs(15);
 
 /// GitHub rejects a request without one, and it is the polite thing to send.
-const USER_AGENT: &str = concat!("google-chat-tauri/", env!("CARGO_PKG_VERSION"));
+const USER_AGENT: &str = concat!("emcom-chat/", env!("CARGO_PKG_VERSION"));
 
 /// Guards against a second scheduler if `start` is ever called twice.
 static RUNNING: AtomicBool = AtomicBool::new(false);
@@ -245,7 +245,7 @@ fn offer(app: &AppHandle, version: &str, url: &str) {
     app.clone()
         .dialog()
         .message(format!(
-            "Google Chat {version} is available. You have {}.\n\nThe download page \
+            "EMCOM Chat {version} is available. You have {}.\n\nThe download page \
              opens in your browser; install it the same way you installed this one.",
             current()
         ))

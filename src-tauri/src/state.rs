@@ -16,10 +16,8 @@ const MAX_RESCUES: u32 = 2;
 /// build, where a panic that has already corrupted this state is exactly what
 /// you want to see rather than to carry on from.
 ///
-/// Two places do recover instead, both for reasons that do not apply here: the
-/// `HOME`-swapping guard in `redact`'s tests, so that one failing test does not
-/// take the rest of the file down with it; and the notification queue, where
-/// dropping one notification is not worth ending the process over.
+/// The notification queue does recover instead: dropping one notification is
+/// not worth ending the process over.
 #[derive(Default)]
 pub struct AppState {
     inner: Mutex<Inner>,
@@ -34,6 +32,7 @@ struct Inner {
     /// Set once `chat.js` reports in from the Chat page. Until then the tray
     /// shows the muted "not connected yet" icon.
     connected: bool,
+    last_page_report: Option<Instant>,
     /// Set when the user picks Quit, so the close handler stops hiding to tray.
     quitting: bool,
     /// Redirects away from a signed-out landing page since the last page that
@@ -66,11 +65,21 @@ impl AppState {
         g.unread = count;
         g.has_unread = has_unread;
         g.connected = true;
+        g.last_page_report = Some(Instant::now());
         changed
     }
 
     pub fn is_connected(&self) -> bool {
         self.inner.lock().unwrap().connected
+    }
+
+    /// A script heartbeat is not proof that Google is delivering messages.
+    pub fn page_report_age(&self) -> Option<Duration> {
+        self.inner
+            .lock()
+            .unwrap()
+            .last_page_report
+            .map(|at| at.elapsed())
     }
 
     pub fn is_quitting(&self) -> bool {

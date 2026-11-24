@@ -27,10 +27,10 @@ use crate::state::AppState;
 /// of the user, and on Linux there are setups where the tray is all there is.
 pub fn about_metadata() -> AboutMetadata<'static> {
     AboutMetadata {
-        name: Some("Google Chat".into()),
+        name: Some("EMCOM Chat".into()),
         icon: crate::icons::decode(crate::icons::APP).ok(),
         version: Some(env!("CARGO_PKG_VERSION").into()),
-        authors: Some(vec!["ankurk91".into()]),
+        authors: Some(vec!["ankurk91 (upstream)".into(), "EMCOM (fork)".into()]),
         comments: Some("Unofficial desktop app for Google Chat.".into()),
         license: Some("GPL-3.0-only".into()),
         website: Some(env!("CARGO_PKG_REPOSITORY").into()),
@@ -202,6 +202,12 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         .build()?;
 
     let help = SubmenuBuilder::new(app, "Help")
+        .item(&MenuItemBuilder::with_id("notification-test", "Send Test Notification").build(app)?)
+        .item(
+            &MenuItemBuilder::with_id("connection-diagnostics", "Connection Diagnostics")
+                .build(app)?,
+        )
+        .separator()
         .item(&MenuItemBuilder::with_id("check-updates", "Check for Updates").build(app)?)
         .separator()
         .item(&MenuItemBuilder::with_id("report-issue", "Report an Issue").build(app)?)
@@ -317,6 +323,15 @@ pub fn handle(app: &AppHandle, id: &str) {
             let enabling = !crate::features::autostart::is_enabled(app);
             crate::features::autostart::set(app, enabling);
         }
+        "notification-test" => crate::features::notifications::show(
+            app,
+            0,
+            "EMCOM Chat notification test",
+            Some(
+                "If this appears, the OS accepted a test notification. Verify a real message separately.",
+            ),
+        ),
+        "connection-diagnostics" => crate::features::diagnostics::show_health(app),
         "check-updates" => crate::features::updates::check_now(app),
 
         "pref-check-updates" => {

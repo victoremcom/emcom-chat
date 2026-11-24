@@ -199,7 +199,7 @@ fn deliver(app: &AppHandle, id: u32, title: &str, body: Option<&str>) {
         // Names the .desktop entry, so the app gets per-app notification
         // settings instead of an anonymous event. Must match the installed
         // desktop file (see Workarounds.md).
-        .hint(notify_rust::Hint::DesktopEntry("Google Chat".into()))
+        .hint(notify_rust::Hint::DesktopEntry("EMCOM Chat".into()))
         // The page plays its own sound; without this the daemon adds a second.
         .hint(notify_rust::Hint::SuppressSound(true))
         // Chat notifications are transient; let the daemon time them out.
@@ -343,8 +343,9 @@ fn show_via_plugin(app: &AppHandle, title: &str, body: Option<&str>) {
         builder = builder.body(body);
     }
 
-    if let Err(e) = builder.show() {
-        log::error!("notification: failed to show notification: {e}");
+    match builder.show() {
+        Ok(()) => log::debug!("notification: submitted to OS (display not confirmed)"),
+        Err(e) => log::error!("notification: failed to show notification: {e}"),
     }
 }
 

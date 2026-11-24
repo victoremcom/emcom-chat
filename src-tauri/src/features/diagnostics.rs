@@ -156,3 +156,30 @@ mod tests {
         assert!(facts.iter().all(|f| f.contains(": ")));
     }
 }
+
+/// Run the network check off the UI thread and show no account/message data.
+pub fn show_health(app: &AppHandle) {
+    use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
+    let app = app.clone();
+    std::thread::spawn(move || {
+        let reachable = crate::features::connectivity::is_online();
+        let heartbeat = app
+            .state::<crate::state::AppState>()
+            .page_report_age()
+            .map(|age| format!("{} seconds ago", age.as_secs()))
+            .unwrap_or_else(|| "not received since launch".into());
+        let report = format!(
+            "Chat TCP endpoint reachable: {reachable}\nLast page script report: {heartbeat}\nLaunch at login: {}\n\n\
+             These checks do not verify Google's message delivery, notification permission, Focus/Do Not Disturb, or sound. \
+             Use Help > Send Test Notification, then verify a real message while the window is closed to the tray. \
+             If messages stop after sleep, reopen Chat and use File > Reload after saving any draft.",
+            crate::features::autostart::is_enabled(&app)
+        );
+        log::info!("health: TCP reachable={reachable}; last page report={heartbeat}");
+        app.dialog()
+            .message(report)
+            .title("EMCOM Chat diagnostics")
+            .kind(MessageDialogKind::Info)
+            .show(|_| {});
+    });
+}

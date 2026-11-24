@@ -15,10 +15,9 @@
 //! URL worked immediately. So joining wifi after launching offline would leave
 //! the app stuck on the error page for as long as it was open.
 //!
-//! Hence the probe keeps going until it succeeds, and then loads Chat. That is
-//! a poller, which this deliberately was not before -- but it costs one TCP
-//! connect every half minute, it only ever runs when the app started with no
-//! network, and it stops the moment the network answers.
+//! Initial failed loads are retried after the network returns. EMCOM keeps
+//! observing TCP reachability and page-script liveness thereafter, without
+//! automatically reloading a live document or interrupting authentication.
 
 use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
@@ -71,9 +70,9 @@ fn probe_host() -> String {
 
 /// A TCP connection to the host the app is about.
 ///
-/// Not an HTTP request: no TLS, no response to parse, nothing that a captive
-/// portal or a proxy can answer misleadingly. DNS plus a completed handshake is
-/// what "the network is up" means here.
+/// This is only DNS plus TCP reachability, not TLS/HTTP or proof of Chat's
+/// message transport. Captive portals and intercepting proxies can mislead it;
+/// do not present this as an end-to-end delivery check.
 pub fn is_online() -> bool {
     let host = probe_host();
     let addresses = match host.to_socket_addrs() {
@@ -107,6 +106,7 @@ pub fn check_at_startup(app: &AppHandle) {
 
         if is_online() {
             log::info!("connectivity: online");
+            monitor(&app);
             return;
         }
 
@@ -126,6 +126,7 @@ pub fn check_at_startup(app: &AppHandle) {
                 // The first probe failed, so the window's own load almost
                 // certainly failed with it. Put Chat back.
                 load_chat(&app);
+                monitor(&app);
                 return;
             }
         }
@@ -157,10 +158,45 @@ pub fn check_at_startup(app: &AppHandle) {
                     started.elapsed().as_secs()
                 );
                 load_chat(&app);
+                monitor(&app);
                 return;
             }
         }
     });
+}
+
+/// Keep observing after startup. Do not reload a live page automatically:
+/// that would discard drafts and can interrupt authentication. Google owns its
+/// reconnect logic; this monitor detects transport loss and missing JS reports.
+fn monitor(app: &AppHandle) {
+    let mut was_online = true;
+    let mut was_stale = false;
+    loop {
+        std::thread::sleep(RECHECK);
+        if app.state::<AppState>().is_quitting() {
+            return;
+        }
+        let online = is_online();
+        if online != was_online {
+            log::info!("connectivity: TCP reachable={online}");
+            if online {
+                // Only an initial failed load may be replaced, never a page
+                // which has reported in or an authentication page.
+                load_chat(app);
+            }
+            was_online = online;
+        }
+        let stale = app
+            .state::<AppState>()
+            .page_report_age()
+            .is_some_and(|age| age > Duration::from_secs(120));
+        if stale != was_stale {
+            log::warn!(
+                "connectivity: page script report stale={stale}; this does not measure message delivery"
+            );
+            was_stale = stale;
+        }
+    }
 }
 
 /// Point the main window at Chat again.
@@ -180,6 +216,14 @@ fn load_chat(app: &AppHandle) {
     let Some(window) = app.get_webview_window(MAIN) else {
         return;
     };
+    // Avoid navigating away from a sign-in or SSO flow that is in progress.
+    if !window
+        .url()
+        .is_ok_and(|url| crate::urls::is_chat_page(&url))
+    {
+        log::debug!("connectivity: not on a Chat URL; leaving navigation alone");
+        return;
+    }
     match crate::urls::APP_URL.parse() {
         Ok(url) => {
             let _ = window.navigate(url);

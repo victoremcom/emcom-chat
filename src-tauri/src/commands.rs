@@ -8,10 +8,25 @@
 //! Each command must also be listed in `permissions/chat-ipc.toml`, or the ACL
 //! rejects it when it arrives from a remote origin.
 
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Manager, WebviewWindow};
 
 use crate::features::window::MAIN;
 use crate::state::AppState;
+
+/// The protocol IPC transport authenticates an Origin header, without its
+/// path. Keep origin ACLs and enforce Chat's path here from the native window,
+/// never from a page-supplied URL. A capability path restriction would silently
+/// reject legitimate calls on that transport.
+fn require_chat_window(window: &WebviewWindow) -> Result<(), String> {
+    if window.label() != MAIN
+        || !window
+            .url()
+            .is_ok_and(|url| crate::urls::is_chat_page(&url))
+    {
+        return Err("IPC is only available in the main Chat window".into());
+    }
+    Ok(())
+}
 
 /// How much of a page-supplied message reaches the log.
 const MAX_PAGE_LOG: usize = 500;
@@ -44,7 +59,8 @@ fn one_line(message: &str) -> String {
 }
 
 #[tauri::command]
-pub fn page_log(level: String, message: String) {
+pub fn page_log(window: WebviewWindow, level: String, message: String) -> Result<(), String> {
+    require_chat_window(&window)?;
     let msg = one_line(&message);
     // The page is remote; log at its requested level but never above info.
     // `debug` is honoured too, so the page can leave diagnostics that a release
@@ -55,19 +71,28 @@ pub fn page_log(level: String, message: String) {
         "debug" => log::debug!("page: {msg}"),
         _ => log::info!("page: {msg}"),
     }
+    Ok(())
 }
 
 #[tauri::command]
-pub fn set_unread_count(app: AppHandle, count: i64, has_unread: bool) {
+pub fn set_unread_count(
+    app: AppHandle,
+    window: WebviewWindow,
+    count: i64,
+    has_unread: bool,
+) -> Result<(), String> {
+    require_chat_window(&window)?;
     let count = count.clamp(0, 9999);
     log::debug!("unread: count={count} has_unread={has_unread}");
     if app.state::<AppState>().set_unread(count, has_unread) {
         crate::features::badge::apply(&app);
     }
+    Ok(())
 }
 
 #[tauri::command]
-pub fn open_external_url(app: AppHandle, url: String) -> Result<(), String> {
+pub fn open_external_url(app: AppHandle, window: WebviewWindow, url: String) -> Result<(), String> {
+    require_chat_window(&window)?;
     let parsed = url::Url::parse(&url).map_err(|e| e.to_string())?;
 
     if !matches!(parsed.scheme(), "http" | "https") {
@@ -102,12 +127,20 @@ pub fn open_external_url(app: AppHandle, url: String) -> Result<(), String> {
 
 /// Backs the `window.Notification` shim in `chat.js`; see `features::notifications`.
 #[tauri::command]
-pub fn show_notification(app: AppHandle, id: u32, title: String, body: Option<String>) {
+pub fn show_notification(
+    app: AppHandle,
+    window: WebviewWindow,
+    id: u32,
+    title: String,
+    body: Option<String>,
+) -> Result<(), String> {
+    require_chat_window(&window)?;
     // Remote-controlled text: clamp it before handing it to the OS.
     let title: String = title.chars().take(200).collect();
     let body = body.map(|b| b.chars().take(500).collect::<String>());
 
     crate::features::notifications::show(&app, id, &title, body.as_deref());
+    Ok(())
 }
 
 /// Keyboard shortcuts, forwarded from `chat.js`.
@@ -130,7 +163,8 @@ pub fn show_notification(app: AppHandle, id: u32, title: String, body: Option<St
 ///
 /// `quit`, `sign-out` and `reset-app` stay menu-click-only.
 #[tauri::command]
-pub fn menu_action(app: AppHandle, action: String) -> Result<(), String> {
+pub fn menu_action(app: AppHandle, window: WebviewWindow, action: String) -> Result<(), String> {
+    require_chat_window(&window)?;
     const ALLOWED: [&str; 7] = [
         "zoom-in",
         "zoom-out",
